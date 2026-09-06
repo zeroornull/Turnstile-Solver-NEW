@@ -58,6 +58,53 @@ python api.py
 
 Server starts on `http://0.0.0.0:5072`.
 
+### Docker (browser included)
+
+The Docker image bundles Chromium and its system dependencies at build time.
+No browser or Python packages are downloaded when the container starts, and the
+host only needs Docker. The initial image build requires internet access.
+
+Prebuilt image (Linux/amd64): `ghcr.io/zeroornull/turnstile-solver-new:latest`.
+If the package is private, authenticate with `docker login ghcr.io` using a
+GitHub account with package access and a classic PAT with `read:packages`.
+
+```bash
+docker pull ghcr.io/zeroornull/turnstile-solver-new:latest
+docker run -d --name turnstile-solver --init --restart unless-stopped \
+  --shm-size=1g -p 127.0.0.1:5072:5072 \
+  ghcr.io/zeroornull/turnstile-solver-new:latest
+```
+
+Or build locally:
+
+```bash
+docker build -t turnstile-solver:local .
+docker run -d --name turnstile-solver --init --restart unless-stopped \
+  --shm-size=1g -p 127.0.0.1:5072:5072 turnstile-solver:local
+```
+
+Open `http://127.0.0.1:5072`. Docker uses bundled Chromium in headless mode,
+not the local CLI's default system Chrome. Chrome, Edge and Camoufox are not
+included, and no display server is configured. Append CLI options after the
+image name, for example `turnstile-solver:local --thread 2 --debug`.
+
+The API has no authentication; keep the localhost port binding unless access is
+protected separately. Proxy credentials are excluded from the image; mount your
+`proxies.txt` at `/app/proxies.txt` read-only and pass `--proxy` when needed.
+
+To deploy without downloading browsers or packages on the target machine:
+
+```bash
+docker save -o turnstile-solver.tar turnstile-solver:local
+# Copy the archive to a machine with a matching CPU architecture, then:
+docker load -i turnstile-solver.tar
+```
+
+Run the loaded image with the command above; add `--pull=never` to prevent image
+pulls. Solving still requires network access to the target site. See the
+[Chinese Docker guide](docs/docker.zh-CN.md) for proxy mounts, port configuration
+and a network-disabled browser/API smoke test.
+
 ---
 
 ## Usage
