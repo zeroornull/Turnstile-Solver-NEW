@@ -64,7 +64,10 @@ The Docker image bundles Chromium and its system dependencies at build time.
 No browser or Python packages are downloaded when the container starts, and the
 host only needs Docker. The initial image build requires internet access.
 
-Prebuilt image (Linux/amd64): `ghcr.io/zeroornull/turnstile-solver-new:latest`.
+Prebuilt image (`linux/amd64` and `linux/arm64`), published by GitHub Actions
+to this repository's GitHub Packages:
+`ghcr.io/zeroornull/turnstile-solver-new:latest`.
+`docker pull` selects the architecture that matches the host.
 If the package is private, authenticate with `docker login ghcr.io` using a
 GitHub account with package access and a classic PAT with `read:packages`.
 

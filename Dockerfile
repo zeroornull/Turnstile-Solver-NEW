@@ -29,7 +29,9 @@ RUN touch /app/proxies.txt && chmod 644 /app/proxies.txt
 
 USER solver
 
-LABEL org.opencontainers.image.source="https://github.com/zeroornull/Turnstile-Solver-NEW"
+LABEL org.opencontainers.image.source="https://github.com/zeroornull/Turnstile-Solver-NEW" \
+      org.opencontainers.image.url="https://github.com/zeroornull/Turnstile-Solver-NEW" \
+      org.opencontainers.image.description="Cloudflare Turnstile and IUAM solver API with bundled Chromium"
 
 EXPOSE 5072
 

@@ -6,7 +6,7 @@
 
 ## 使用 GitHub 上的预构建镜像
 
-镜像地址：`ghcr.io/zeroornull/turnstile-solver-new:latest`，平台为 `linux/amd64`。镜像发布在 [fork 仓库](https://github.com/zeroornull/Turnstile-Solver-NEW) 关联的 GitHub Packages 中，压缩包不会提交到 Git。
+镜像地址：`ghcr.io/zeroornull/turnstile-solver-new:latest`，支持 `linux/amd64` 和 `linux/arm64`。由 GitHub Actions 构建并发布到 [本仓库](https://github.com/zeroornull/Turnstile-Solver-NEW) 的 GitHub Packages；`docker pull` 会按宿主机架构选择对应镜像。压缩包不会提交到 Git。
 
 如果镜像包是私有的，先执行 `docker login ghcr.io`，使用有权访问该包的 GitHub 账号登录；密码处输入具有 `read:packages` 权限的 classic PAT，而不是 GitHub 登录密码。不要把 PAT 写进脚本或提交到仓库。
 
@@ -22,7 +22,7 @@ docker run -d \
   ghcr.io/zeroornull/turnstile-solver-new:latest
 ```
 
-拉取镜像时会一次性下载包括浏览器在内的镜像层；容器启动时不会再单独下载浏览器。`latest` 指向最近发布版本，`sha-<提交短哈希>` 标签用于定位对应代码版本。ARM 机器需要自行构建目标架构镜像，不能把当前发布的镜像当作原生 ARM 镜像。
+拉取镜像时会一次性下载包括浏览器在内的镜像层；容器启动时不会再单独下载浏览器。`latest` 指向默认分支最近一次成功发布，`sha-<提交短哈希>` 标签用于定位对应代码版本。推送到 `master`、推送 `v*` 标签，或手动运行 **Publish container image** 工作流都会构建并推送双架构镜像。
 
 ## 构建与启动
 

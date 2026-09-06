@@ -1,0 +1,224 @@
+name: Publish container image
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: docker-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY_IMAGE: ghcr.io/zeroornull/turnstile-solver-new
+
+jobs:
+  preflight:
+    name: Check GHCR package link
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Fail if an unlinked package would block GITHUB_TOKEN
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          owner="${{ github.repository_owner }}"
+          name="${REGISTRY_IMAGE##*/}"
+          if ! gh api "users/${owner}/packages/container/${name}" > /tmp/pkg.json 2>/tmp/pkg.err; then
+            echo "Package metadata unavailable (missing or no access). Continuing."
+            cat /tmp/pkg.err || true
+            exit 0
+          fi
+          linked="$(jq -r '.repository.full_name // empty' /tmp/pkg.json)"
+          if [ -z "${linked}" ]; then
+            echo "::error::GHCR package ${REGISTRY_IMAGE} exists but is not linked to ${{ github.repository }}. GITHUB_TOKEN cannot push until it is connected. Open https://github.com/users/${owner}/packages/container/package/${name} → Package settings → Connect repository, or delete the unlinked package and re-run."
+            exit 1
+          fi
+          echo "Package is linked to ${linked}."
+
+  build:
+    name: Build ${{ matrix.platform }}
+    needs: preflight
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+      actions: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Native runners: the image installs Chromium and apt deps, which is unreliable under QEMU.
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Prepare
+        run: |
+          platform="${{ matrix.platform }}"
+          echo "PLATFORM_PAIR=${platform//\//-}" >> "${GITHUB_ENV}"
+
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY_IMAGE }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+          labels: |
+            org.opencontainers.image.description=Cloudflare Turnstile and IUAM solver API with bundled Chromium
+          annotations: |
+            org.opencontainers.image.description=Cloudflare Turnstile and IUAM solver API with bundled Chromium
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
+
+      - name: Build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          load: true
+          tags: turnstile-solver:ci
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=${{ env.PLATFORM_PAIR }}
+
+      - name: Smoke test bundled Chromium
+        run: |
+          set -euo pipefail
+          docker run -d --name turnstile-solver-smoke \
+            --network none --init --shm-size=1g \
+            turnstile-solver:ci
+          cleanup() { docker rm -f turnstile-solver-smoke >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          docker exec -i turnstile-solver-smoke python - < tests/docker_smoke.py
+
+      - name: Push by digest
+        id: push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
+          outputs: type=image,name=${{ env.REGISTRY_IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=${{ env.PLATFORM_PAIR }}
+          cache-to: type=gha,mode=max,scope=${{ env.PLATFORM_PAIR }}
+
+      - name: Export digest
+        run: |
+          mkdir -p "${{ runner.temp }}/digests"
+          digest="${{ steps.push.outputs.digest }}"
+          touch "${{ runner.temp }}/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    name: Merge multi-arch manifest
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+      actions: read
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.REGISTRY_IMAGE }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+          labels: |
+            org.opencontainers.image.description=Cloudflare Turnstile and IUAM solver API with bundled Chromium
+          annotations: |
+            org.opencontainers.image.description=Cloudflare Turnstile and IUAM solver API with bundled Chromium
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create manifest list and push
+        working-directory: ${{ runner.temp }}/digests
+        env:
+          SOURCE_REPO: ${{ github.repository }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          sources=()
+          for digest in *; do
+            sources+=("${REGISTRY_IMAGE}@sha256:${digest}")
+          done
+          if [ "${#sources[@]}" -eq 0 ]; then
+            echo "No image digests found" >&2
+            exit 1
+          fi
+          tags="$(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "${DOCKER_METADATA_OUTPUT_JSON}")"
+          # GHCR attaches a user-owned package to the repo from the index source annotation.
+          # provenance is disabled on the per-arch images so the package page does not list unknown/unknown.
+          # shellcheck disable=SC2086
+          docker buildx imagetools create \
+            --annotation "index:org.opencontainers.image.source=https://github.com/${SOURCE_REPO}" \
+            --annotation "index:org.opencontainers.image.url=https://github.com/${SOURCE_REPO}" \
+            --annotation "index:org.opencontainers.image.revision=${SOURCE_SHA}" \
+            --annotation "index:org.opencontainers.image.description=Cloudflare Turnstile and IUAM solver API with bundled Chromium" \
+            ${tags} \
+            "${sources[@]}"
+
+      - name: Inspect image
+        run: docker buildx imagetools inspect "${REGISTRY_IMAGE}:${{ steps.meta.outputs.version }}"
