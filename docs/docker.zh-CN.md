@@ -1,6 +1,6 @@
 # Docker 部署：镜像内置浏览器
 
-镜像包含 Python、项目依赖、Chromium 及其 Linux 系统依赖。容器启动时直接使用镜像中的浏览器，不运行 `pip install` 或浏览器下载命令，宿主机也不需要安装 Python、Chrome。
+镜像包含 Python、项目依赖、Camoufox（默认反检测浏览器）、Chromium 及其 Linux 系统依赖。容器启动时直接使用镜像中的浏览器，不运行 `pip install` 或浏览器下载命令，宿主机也不需要安装 Python、Chrome。
 
 首次构建需要联网拉取基础镜像、Python 包和浏览器。构建完成后，可以用 `docker save` 导出整个镜像，在另一台机器上用 `docker load` 导入；启动时不再下载浏览器。访问目标网站仍然需要网络，这不是离线解题镜像。
 
@@ -46,7 +46,7 @@ docker logs -f turnstile-solver
 
 `--init` 用来回收浏览器子进程，`--shm-size=1g` 为 Chromium 提供更大的共享内存。镜像使用非 root 用户运行。API 没有鉴权，示例仅绑定宿主机的回环地址；不要直接暴露到公网。需要远程访问时，应先配置带鉴权的反向代理或使用受控的私有网络。
 
-Docker 默认使用 `--browser_type chromium`，与本地 `python api.py` 默认的 `chrome` 不同。只预装 Chromium，不包含 Chrome、Edge 或 Camoufox；直接切换到这些浏览器会因未安装而失败。容器未配置显示会话，不要直接传 `--no-headless`。
+镜像默认 `--browser_type camoufox`，与本地 `python api.py` 的默认一致；同时内置 Chromium，Camoufox 不可用时自动回退。不包含 Chrome、Edge；直接切换到这些浏览器会因未安装而失败。容器未配置显示会话，不要直接传 `--no-headless`。Camoufox 使用固定 macOS persona，以通过 Cloudflare 的交互式挑战。
 
 ## 修改启动参数
 
@@ -71,7 +71,7 @@ docker run --rm --init --shm-size=1g \
   turnstile-solver:local --proxy
 ```
 
-确保挂载文件可被容器内 UID `10001` 的用户读取。`/cf_clearance` 接口也支持通过请求参数单独指定代理。
+`/turnstile` 和 `/cf_clearance` 接口都支持通过请求参数单独指定代理。
 
 ## 导出镜像，部署时无需下载浏览器
 
@@ -100,7 +100,7 @@ docker run -d \
 
 不要用宿主机目录覆盖 `/ms-playwright`，也不要在现有容器中单独升级 Patchright，否则可能覆盖浏览器文件或造成驱动版本不匹配。需要升级时重新构建镜像。
 
-Dockerfile 默认固定 Patchright `1.62.3`，安装与它匹配的完整 Chromium，不额外安装 headless shell。升级时可以通过 `--build-arg PATCHRIGHT_VERSION=<版本号>` 覆盖，并重新运行下面的断网测试。其余 Python 依赖沿用项目的 `requirements.txt`。
+Dockerfile 默认固定 Patchright `1.62.3`，安装与它匹配的完整 Chromium（不额外安装 headless shell），并在构建期执行 `python -m camoufox fetch` 下载 Camoufox 及指纹模型（约 1.3GB，amd64/arm64 均有构建）。升级时可以通过 `--build-arg PATCHRIGHT_VERSION=<版本号>` 覆盖，并重新运行下面的断网测试。其余 Python 依赖沿用项目的 `requirements.txt`。
 
 ## 断网验证
 

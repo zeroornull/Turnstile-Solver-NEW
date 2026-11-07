@@ -23,7 +23,7 @@
 - 🎯 **Решение Turnstile** - route-intercept заглушка с fallback на реальную страницу, 5-15 секунд на решение
 - 🛡️ **Прохождение IUAM / Challenge** - Managed Challenge + JS Challenge interstitial, получение `cf_clearance` с полным набором для replay (cookies, User-Agent, заголовки)
 - 🚀 **Многопоточность** - несколько задач одновременно с лимитом конкуренции
-- 🌐 **Несколько браузеров** - Chrome, Edge, Chromium, Camoufox
+- 🌐 **Анти-детект по умолчанию** - Camoufox (по умолчанию); Chrome, Edge, Chromium также доступны
 - 🔌 **Поддержка прокси** - все форматы из `proxies.txt`, плюс прокси на запрос для `/cf_clearance`
 - 📊 **REST API** - асинхронная модель задач (создать задачу → опросить результат), легко интегрировать
 - 📦 **Без базы данных** - задачи живут в памяти, обслуживание не нужно
@@ -47,7 +47,7 @@ pip install -r requirements.txt
 
 ```bash
 python -m patchright install chromium   # или: install msedge / системный Chrome
-python -m camoufox fetch                # если нужен Camoufox
+python -m camoufox fetch                # браузер по умолчанию (анти-детект Firefox)
 ```
 
 ### 3. Запуск
@@ -67,7 +67,7 @@ python api.py [опции]
 
 Опции:
   --no-headless           Показать окно браузера (по умолчанию: headless)
-  --browser_type string   chromium | chrome | msedge | camoufox (по умолчанию "chrome")
+  --browser_type string   camoufox (по умолчанию) | chromium | chrome | msedge
   --thread int            Макс. одновременных решений (по умолчанию 4)
   --proxy                 Случайный прокси из proxies.txt
   --useragent string      Свой User-Agent
@@ -180,7 +180,7 @@ Turnstile-Solver-NEW/
 ## Решение проблем
 
 ### "Browser not found"
-Установите браузер: `python -m patchright install chromium` (или `--browser_type chrome` с системным Chrome).
+Установите браузер: `python -m camoufox fetch` (по умолчанию) или `python -m patchright install chromium`.
 
 ### "Port already in use"
 Смените порт: `python api.py --port 5080`.

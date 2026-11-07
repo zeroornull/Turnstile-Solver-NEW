@@ -20,10 +20,10 @@ Local API solver for Cloudflare Turnstile and IUAM (Under Attack Mode) — harve
 
 ## Features
 
-- 🎯 **Turnstile solving** - Route-intercept stub page with real-page fallback, 5-15 seconds per solve
+- 🎯 **Turnstile solving** - Camoufox (anti-detect Firefox) with trusted checkbox clicks, hostname-correct stub + real-page fallback
 - 🛡️ **IUAM / Challenge pass** - Managed Challenge + JS Challenge interstitials, harvests `cf_clearance` with the full replay bundle (cookies, User-Agent, headers)
 - 🚀 **Multi-threaded** - Solve multiple tasks simultaneously with a concurrency limit
-- 🌐 **Multiple browsers** - Chrome, Edge, Chromium, Camoufox
+- 🌐 **Anti-detect by default** - Camoufox (default); Chrome, Edge, Chromium also supported
 - 🔌 **Proxy support** - All formats from `proxies.txt`, plus per-request proxy for `/cf_clearance`
 - 📊 **REST API** - Async task model (create task → poll result), easy to integrate
 - 📦 **No database** - Tasks live in memory, nothing to maintain
@@ -46,8 +46,8 @@ pip install -r requirements.txt
 ### 2. Install a browser
 
 ```bash
-python -m patchright install chromium   # or: install msedge / use system Chrome
-python -m camoufox fetch                # if you want Camoufox
+python -m camoufox fetch                # default browser (anti-detect Firefox)
+python -m patchright install chromium   # optional fallback browser
 ```
 
 ### 3. Run
@@ -60,7 +60,7 @@ Server starts on `http://0.0.0.0:5072`.
 
 ### Docker (browser included)
 
-The Docker image bundles Chromium and its system dependencies at build time.
+The Docker image bundles Camoufox (anti-detect Firefox) and Chromium at build time.
 No browser or Python packages are downloaded when the container starts, and the
 host only needs Docker. The initial image build requires internet access.
 
@@ -86,10 +86,9 @@ docker run -d --name turnstile-solver --init --restart unless-stopped \
   --shm-size=1g -p 127.0.0.1:5072:5072 turnstile-solver:local
 ```
 
-Open `http://127.0.0.1:5072`. Docker uses bundled Chromium in headless mode,
-not the local CLI's default system Chrome. Chrome, Edge and Camoufox are not
-included, and no display server is configured. Append CLI options after the
-image name, for example `turnstile-solver:local --thread 2 --debug`.
+Open `http://127.0.0.1:5072`. Docker runs the bundled Camoufox in headless mode,
+so no display server is needed. Chrome, Edge and system Chrome are not included.
+Append CLI options after the image name, for example `turnstile-solver:local --thread 2 --debug`.
 
 The API has no authentication; keep the localhost port binding unless access is
 protected separately. Proxy credentials are excluded from the image; mount your
@@ -117,7 +116,7 @@ python api.py [options]
 
 Options:
   --no-headless           Show the browser window (default: headless)
-  --browser_type string   chromium | chrome | msedge | camoufox (default "chrome")
+  --browser_type string   camoufox (default) | chromium | chrome | msedge
   --thread int            Max concurrent solves (default 4)
   --proxy                 Use random proxy from proxies.txt
   --useragent string      Custom User-Agent
@@ -150,6 +149,7 @@ GET /turnstile?url=https://example.com&sitekey=0x4AAAAAAA
 | `sitekey` | string | Turnstile site key | Yes |
 | `action` | string | Widget `data-action` binding | No |
 | `cdata` | string | Widget `data-cdata` binding | No |
+| `proxy` | string | Per-request proxy (Turnstile is bound to the exit IP) | No |
 
 ### Pass IUAM (cf_clearance)
 
@@ -230,13 +230,21 @@ Turnstile-Solver-NEW/
 ## Troubleshooting
 
 ### "Browser not found"
-Install the browser: `python -m patchright install chromium` (or use `--browser_type chrome` with system Chrome).
+Run `python -m camoufox fetch` (default browser) or `python -m patchright install chromium` (fallback).
 
 ### "Port already in use"
 Change it: `python api.py --port 5080`.
 
 ### cf_clearance not set (challenge unsolved)
 Datacenter IPs are scored harshly — run with `--no-headless` and/or a residential proxy.
+
+### Turnstile token never appears (error 600010 / status=fail)
+Cloudflare returns `600010` ("bot behavior detected") for headless Chromium and
+datacenter IPs. The default **Camoufox** browser passes the real challenge where
+plain headless Chromium does not. If it still fails, supply a residential proxy:
+`--proxy` (from `proxies.txt`) or per-request `/turnstile?...&proxy=http://user:pass@ip:port`.
+`600*` errors are retryable; the solver retries both the hostname-correct stub
+and the real page. Tokens are single-use and must be replayed within 300s.
 
 ---
 

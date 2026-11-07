@@ -5,20 +5,24 @@ ARG PATCHRIGHT_VERSION=1.62.3
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    XDG_CACHE_HOME=/cache
 
 WORKDIR /app
 
-# Install the driver and its matching full Chromium during the build, not startup.
-# The app uses channel="chromium" with --headless=new, so no headless shell is needed.
+# Install drivers and browsers during the build, not at startup.
+# Camoufox (anti-detect Firefox) is the default solver browser; its binary and
+# fingerprint model are fetched here too so the image is self-contained.
 COPY requirements.txt ./
 RUN python -m pip install -r requirements.txt "patchright==${PATCHRIGHT_VERSION}" \
     && python -m patchright install --with-deps --no-shell chromium \
+    && python -m camoufox fetch \
     && chmod -R a+rX /ms-playwright \
     && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd --gid 10001 solver \
-    && useradd --uid 10001 --gid solver --create-home solver
+    && useradd --uid 10001 --gid solver --create-home solver \
+    && chown -R solver:solver /cache
 
 COPY api.py ./
 COPY core/ ./core/
@@ -31,8 +35,8 @@ USER solver
 
 LABEL org.opencontainers.image.source="https://github.com/zeroornull/Turnstile-Solver-NEW" \
       org.opencontainers.image.url="https://github.com/zeroornull/Turnstile-Solver-NEW" \
-      org.opencontainers.image.description="Cloudflare Turnstile and IUAM solver API with bundled Chromium"
+      org.opencontainers.image.description="Cloudflare Turnstile and IUAM solver API with bundled Camoufox and Chromium"
 
 EXPOSE 5072
 
-ENTRYPOINT ["python", "api.py", "--browser_type", "chromium"]
+ENTRYPOINT ["python", "api.py", "--browser_type", "camoufox"]

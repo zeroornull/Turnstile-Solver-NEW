@@ -49,6 +49,7 @@ INDEX_HTML = """
         <ul class="list-disc pl-6 mb-6 text-gray-300">
             <li><strong>url</strong>: The URL where Turnstile is to be validated</li>
             <li><strong>sitekey</strong>: The site key for Turnstile</li>
+            <li><strong>proxy</strong>: optional per-request proxy (exit-IP bound)</li>
             <li><strong>action</strong> / <strong>cdata</strong>: optional widget bindings</li>
         </ul>
         <div class="bg-gray-700 p-4 rounded-lg mb-6 border border-red-500">
@@ -223,6 +224,7 @@ def create_app(config: BrowserConfig, threads: int = 4) -> Quart:
         sitekey = request.args.get('sitekey')
         action = request.args.get('action')
         cdata = request.args.get('cdata')
+        proxy = request.args.get('proxy')
 
         if not url or not sitekey:
             return jsonify({
@@ -232,9 +234,9 @@ def create_app(config: BrowserConfig, threads: int = 4) -> Quart:
             }), 200
 
         task_id = _new_task('turnstile', url=url, sitekey=sitekey)
-        proxy = pick_proxy(config.proxy_support)
+        chosen_proxy = proxy or pick_proxy(config.proxy_support)
         job = lambda page: _turnstile_job(page, url, sitekey, action, cdata)
-        asyncio.create_task(_run_solve(task_id, job, config, semaphore, proxy))
+        asyncio.create_task(_run_solve(task_id, job, config, semaphore, chosen_proxy))
         return jsonify({"errorId": 0, "taskId": task_id}), 200
 
     @app.route('/cf_clearance', methods=['GET'])
@@ -297,10 +299,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--no-headless', action='store_true',
                         help='Show browser (default: headless)')
     parser.add_argument('--useragent', type=str,
-                        help='Custom User-Agent (headless: default Chrome 150 + sec-ch-ua)')
+                        help='Custom User-Agent (headless Chromium: coherent UA by default)')
     parser.add_argument('--debug', action='store_true', help='Debug logging')
-    parser.add_argument('--browser_type', type=str, default='chrome',
-                        help='chromium, chrome, msedge, camoufox')
+    parser.add_argument('--browser_type', type=str, default='camoufox',
+                        help='camoufox (default, anti-detect), chromium, chrome, msedge')
     parser.add_argument('--thread', type=int, default=4, help='Max concurrent solves')
     parser.add_argument('--proxy', action='store_true', help='Use proxies.txt')
     parser.add_argument('--host', type=str, default='0.0.0.0')

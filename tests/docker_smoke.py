@@ -65,5 +65,28 @@ class BrowserSmokeTests(unittest.IsolatedAsyncioTestCase):
             await close_browser(driver, browser, debug=True)
 
 
+    async def test_token_reader_uses_first_non_empty_input(self):
+        """A page can hold several widgets; an empty first input must not mask a token."""
+        from core.templates import TOKEN_VALUE_JS, build_route_html, route_glob
+
+        self.assertEqual(route_glob("https://example.com/login"), "https://example.com/login")
+        self.assertEqual(route_glob("https://example.com"), "https://example.com/")
+        self.assertIn('data-callback="__tsToken"', build_route_html("0xKEY"))
+
+        config = BrowserConfig(browser_type="chromium")
+        driver = browser = None
+        try:
+            driver, browser = await launch_browser(config)
+            context = await browser.new_context(**context_options(config, None))
+            page = await context.new_page()
+            await page.set_content(
+                '<input name="cf-turnstile-response" value="">'
+                '<input name="cf-turnstile-response" value="TOKEN-2">'
+            )
+            self.assertEqual(await page.evaluate(TOKEN_VALUE_JS), "TOKEN-2")
+            await context.close()
+        finally:
+            await close_browser(driver, browser, debug=True)
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
