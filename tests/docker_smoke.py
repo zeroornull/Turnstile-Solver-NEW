@@ -1,5 +1,6 @@
 """Run inside a started container with --network none; see docs/docker.zh-CN.md."""
 
+import ctypes
 import json
 import os
 import time
@@ -47,6 +48,12 @@ class ApiSmokeTests(unittest.TestCase):
 
 
 class BrowserSmokeTests(unittest.IsolatedAsyncioTestCase):
+    def test_camoufox_system_libs_available(self):
+        """Camoufox's libmozgtk.so needs libgtk-3.so.0. Without it the default
+        browser fails to start and the solver silently falls back to Chromium,
+        which Cloudflare rejects with 600010."""
+        ctypes.CDLL("libgtk-3.so.0")
+
     async def test_bundled_chromium_renders_without_network(self):
         config = BrowserConfig(browser_type="chromium")
         driver = browser = None
@@ -63,7 +70,6 @@ class BrowserSmokeTests(unittest.IsolatedAsyncioTestCase):
             await context.close()
         finally:
             await close_browser(driver, browser, debug=True)
-
 
     async def test_token_reader_uses_first_non_empty_input(self):
         """A page can hold several widgets; an empty first input must not mask a token."""
@@ -87,6 +93,7 @@ class BrowserSmokeTests(unittest.IsolatedAsyncioTestCase):
             await context.close()
         finally:
             await close_browser(driver, browser, debug=True)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

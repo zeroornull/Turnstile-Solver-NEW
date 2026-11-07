@@ -100,7 +100,7 @@ docker run -d \
 
 不要用宿主机目录覆盖 `/ms-playwright`，也不要在现有容器中单独升级 Patchright，否则可能覆盖浏览器文件或造成驱动版本不匹配。需要升级时重新构建镜像。
 
-Dockerfile 默认固定 Patchright `1.62.3`，安装与它匹配的完整 Chromium（不额外安装 headless shell），并在构建期执行 `python -m camoufox fetch` 下载 Camoufox 及指纹模型（约 1.3GB，amd64/arm64 均有构建）。升级时可以通过 `--build-arg PATCHRIGHT_VERSION=<版本号>` 覆盖，并重新运行下面的断网测试。其余 Python 依赖沿用项目的 `requirements.txt`。
+Dockerfile 默认固定 Patchright `1.62.3`，安装与它匹配的完整 Chromium（不额外安装 headless shell），执行 `python -m playwright install-deps firefox` 安装 Camoufox 所需的 GTK 等系统库，并在构建期执行 `python -m camoufox fetch` 下载 Camoufox 及指纹模型（约 1.3GB，amd64/arm64 均有构建）。缺少 `libgtk-3.so.0` 时 Camoufox 无法启动，求解器会回退到 Chromium 并被 Cloudflare 以 600010 拒绝。升级时可以通过 `--build-arg PATCHRIGHT_VERSION=<版本号>` 覆盖，并重新运行下面的断网测试。其余 Python 依赖沿用项目的 `requirements.txt`。
 
 ## 断网验证
 

@@ -9,12 +9,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     XDG_CACHE_HOME=/cache
 
 WORKDIR /app
-
-# Install drivers and browsers during the build, not at startup.
+# Install drivers, browsers and their system libs during the build, not startup.
 # Camoufox (anti-detect Firefox) is the default solver browser; its binary and
-# fingerprint model are fetched here too so the image is self-contained.
+# fingerprint model are fetched here too. `playwright install-deps firefox`
+# installs libgtk-3-0 etc. - without them Camoufox cannot start and the solver
+# silently falls back to Chromium, which Cloudflare rejects with 600010.
 COPY requirements.txt ./
 RUN python -m pip install -r requirements.txt "patchright==${PATCHRIGHT_VERSION}" \
+    && python -m playwright install-deps firefox \
     && python -m patchright install --with-deps --no-shell chromium \
     && python -m camoufox fetch \
     && chmod -R a+rX /ms-playwright \
